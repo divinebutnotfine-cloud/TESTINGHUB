@@ -4,19 +4,20 @@ local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
--- WebSocket Check
+--------------------------------------------------------------------------------
+-- WEBSOCKET FIX #1: Clean detection
+--------------------------------------------------------------------------------
 local WebSocket = nil
-if syn and syn.websocket then
+
+if syn and syn.websocket and typeof(syn.websocket.connect) == "function" then
     WebSocket = syn.websocket.connect
-elseif WebSocket and WebSocket.connect then
-    WebSocket = WebSocket.connect
-end
-if not WebSocket and not getgenv().WebSocket then
-    if typeof(WebSocket) ~= "function" then
-        warn("WebSocket not supported.")
-    end
+elseif getgenv().WebSocket and typeof(getgenv().WebSocket.connect) == "function" then
+    WebSocket = getgenv().WebSocket.connect
+elseif typeof(WebSocket) == "function" then
+    -- already set somehow
 else
-    WebSocket = WebSocket or getgenv().WebSocket.connect
+    warn("WebSocket not supported on this executor.")
+    return
 end
 
 --------------------------------------------------------------------------------
@@ -205,7 +206,7 @@ MainFrame.InputChanged:Connect(function(input)
 end)
 
 -- Glow animation (yellow)
-spawn(function()
+task.spawn(function()
     local t = 0
     while MainFrame and MainFrame.Parent do
         t = t + 0.015
@@ -252,7 +253,7 @@ AccentGradient.Color = ColorSequence.new{
     ColorSequenceKeypoint.new(1, Colors.AccentDark),
 }
 
-spawn(function()
+task.spawn(function()
     local offset = 0
     while AccentLine and AccentLine.Parent do
         offset = (offset + 0.005) % 1
@@ -288,7 +289,7 @@ StatusDot.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
 StatusDot.BorderSizePixel = 0
 Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
 
-spawn(function()
+task.spawn(function()
     while StatusDot and StatusDot.Parent do
         Tween(StatusDot, {Size = UDim2.new(0, 10, 0, 10), Position = UDim2.new(1, -131, 0.5, -5)}, 0.5)
         task.wait(0.5)
@@ -429,7 +430,7 @@ SearchIcon.BackgroundTransparency = 1
 local SearchBox = Instance.new("TextBox", SearchContainer)
 SearchBox.Size = UDim2.new(1, -40, 1, 0)
 SearchBox.Position = UDim2.new(0, 34, 0, 0)
-SearchBox.PlaceholderText = "Search brainrots..."
+SearchBox.PlaceholderText = "Search offers..."
 SearchBox.PlaceholderColor3 = Colors.TextMuted
 SearchBox.Text = ""
 SearchBox.BackgroundTransparency = 1
@@ -686,7 +687,7 @@ local function WsSend(payload)
 end
 
 local function StartPingLoop()
-    spawn(function()
+    task.spawn(function()
         while isConnected and ws do
             pingTimestamp = tick()
             local ok = WsSend({type = "ping", timestamp = pingTimestamp, clientId = my_client_id})
@@ -834,7 +835,7 @@ local function CreateOfferCard(parent, offer, isHostOffer)
         HoverBind(btnReject, Colors.Danger, Color3.fromRGB(220, 80, 80), Color3.fromRGB(160, 40, 40))
         btnReject.MouseButton1Click:Connect(function() RippleEffect(btnReject) end)
 
-        spawn(function()
+        task.spawn(function()
             accent.BackgroundColor3 = Colors.Accent
             for i = 1, 3 do
                 Tween(frameStroke, {Color = Colors.AccentDark}, 0.15)
@@ -1037,7 +1038,7 @@ end
 --------------------------------------------------------------------------------
 -- WEBSOCKET CONNECTION
 --------------------------------------------------------------------------------
-spawn(function()
+task.spawn(function()
     if not WebSocket then return end
 
     local ok, result = pcall(function()
@@ -1056,7 +1057,16 @@ spawn(function()
         if not s or not data then return end
 
         if data.type == "connect_success" then
-            WsSend({type = "identify", name = LocalPlayer.Name, displayName = LocalPlayer.DisplayName})
+            ------------------------------------------------------------------
+            -- WEBSOCKET FIX #2: Send full identify with clientId + userId
+            ------------------------------------------------------------------
+            WsSend({
+                type = "identify",
+                name = LocalPlayer.Name,
+                displayName = LocalPlayer.DisplayName,
+                clientId = my_client_id,
+                userId = LocalPlayer.UserId
+            })
 
         elseif data.type == "identify_ok" then
             isConnected = true
@@ -1148,7 +1158,6 @@ PostButton.MouseButton1Click:Connect(function()
         end
     end)
 
-    -- Update empty state text but don't switch tab
     local hostEmpty = PageHost:FindFirstChild("EmptyState")
     if hostEmpty and #allHostOffers == 0 then
         hostEmpty.Text = "⏳  Waiting for offers on your listing..."
