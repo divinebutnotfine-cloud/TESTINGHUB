@@ -1,0 +1,80 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local Camera = workspace.CurrentCamera
+
+local resetTargetPart = nil
+task.spawn(function()
+    local craftPos = workspace:WaitForChild("CraftingMachine", 3)
+    if craftPos and craftPos:FindFirstChild("VFX") and craftPos.VFX:FindFirstChild("Secret") then
+        resetTargetPart = craftPos.VFX.Secret:WaitForChild("SoundPart", 1)
+    end
+end)
+
+local ScreenGui = Instance.new("ScreenGui", PlayerGui)
+ScreenGui.Name = "StandaloneResetGui"
+ScreenGui.ResetOnSpawn = false
+
+local InstaResetBtn = Instance.new("TextButton", ScreenGui)
+InstaResetBtn.Size = UDim2.new(0, 150, 0, 40)
+InstaResetBtn.Position = UDim2.new(0.5, -75, 0.1, 0)
+InstaResetBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+InstaResetBtn.TextColor3 = Color3.fromRGB(255, 220, 0)
+InstaResetBtn.Text = "INSTA RESET"
+InstaResetBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", InstaResetBtn)
+
+local btnStroke = Instance.new("UIStroke", InstaResetBtn)
+btnStroke.Color = Color3.fromRGB(255, 220, 0)
+btnStroke.Thickness = 1
+
+InstaResetBtn.Active = true
+InstaResetBtn.Draggable = true
+
+local resetDebounce = false
+
+InstaResetBtn.MouseButton1Click:Connect(function()
+    if resetDebounce or not resetTargetPart then return end
+    resetDebounce = true
+    InstaResetBtn.Text = "DONE"
+
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local root = character and character:FindFirstChild("HumanoidRootPart")
+
+    if humanoid and root then
+        local camCF = Camera.CFrame
+        Camera.CameraType = Enum.CameraType.Scriptable
+        Camera.CFrame = camCF
+
+        local head = character:FindFirstChild("Head")
+        if root:FindFirstChild("Died") then root.Died:Destroy() end
+        if head and head:FindFirstChild("Died") then head.Died:Destroy() end
+
+        for _, part in ipairs(character:GetDescendants()) do
+            if part:IsA("BasePart") or part:IsA("Decal") then
+                part.Transparency = 1
+            elseif part:IsA("ParticleEmitter") or part:IsA("Trail") or part:IsA("Beam") then
+                part.Enabled = false
+            end
+        end
+
+        root.CFrame = resetTargetPart.CFrame
+        humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+
+        task.spawn(function()
+            pcall(function() LocalPlayer:LoadCharacter() end)
+        end)
+    end
+
+    task.spawn(function()
+        local newChar = LocalPlayer.CharacterAdded:Wait()
+        local newHum = newChar:WaitForChild("Humanoid", 3)
+        if newHum then
+            Camera.CameraType = Enum.CameraType.Custom
+            Camera.CameraSubject = newHum
+        end
+        resetDebounce = false
+        InstaResetBtn.Text = "INSTA RESET"
+    end)
+end)
